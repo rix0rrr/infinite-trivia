@@ -34,8 +34,8 @@ defaultQuestion =
 
 type QuestionStage
     = Category
-    | Ask
-    | Answer
+    | Asking
+    | Answering
 
 
 type alias Question =
@@ -91,7 +91,7 @@ ask game =
             game.currentQuestion
 
         nextCurrentQuestion =
-            { currentQuestion | stage = Ask }
+            { currentQuestion | stage = Asking }
     in
     { game | currentQuestion = nextCurrentQuestion }
 
@@ -103,7 +103,7 @@ answer game =
             game.currentQuestion
 
         nextCurrentQuestion =
-            { currentQuestion | stage = Answer }
+            { currentQuestion | stage = Answering }
     in
     { game | currentQuestion = nextCurrentQuestion }
 
@@ -125,10 +125,10 @@ viewQuestion question =
                 Category ->
                     viewCategory question
 
-                Ask ->
+                Asking ->
                     viewAsk question
 
-                Answer ->
+                Answering ->
                     viewAnswer question
     in
     Html.div []
@@ -143,8 +143,8 @@ viewCategory question =
             [ Html.text question.category
             ]
         , Html.div [ Attribute.class "controls" ]
-            [ Html.button [ Event.onClick DoSkip ] [ Html.text "skip" ]
-            , Html.button [ Event.onClick DoAsk ] [ Html.text "ask" ]
+            [ Html.button [ Event.onClick Skip ] [ Html.text "skip" ]
+            , Html.button [ Event.onClick Ask ] [ Html.text "ask" ]
             ]
         ]
 
@@ -157,8 +157,8 @@ viewAsk question =
             , Html.div [] [ Html.text question.question ]
             ]
         , Html.div [ Attribute.class "controls" ]
-            [ Html.button [ Event.onClick DoSkip] [ Html.text "skip" ]
-            , Html.button [ Event.onClick DoAnswer] [ Html.text "answer" ]
+            [ Html.button [ Event.onClick Skip] [ Html.text "skip" ]
+            , Html.button [ Event.onClick Answer] [ Html.text "answer" ]
             ]
         ]
 
@@ -172,7 +172,7 @@ viewAnswer question =
             , Html.div [] [ Html.text question.answer ]
             ]
         , Html.div [ Attribute.class "controls" ]
-            [ Html.button [ Event.onClick DoNext ] [ Html.text "next" ]
+            [ Html.button [ Event.onClick Next ] [ Html.text "next" ]
             ]
         ]
 
@@ -182,10 +182,10 @@ viewAnswer question =
 
 
 type Message
-    = DoSkip
-    | DoAsk
-    | DoAnswer
-    | DoNext
+    = Skip
+    | Ask
+    | Answer
+    | Next
 
 
 update : Message -> Game -> ( Game, Cmd Message )
@@ -193,16 +193,16 @@ update message game =
     let
         nextGame =
             case message of
-                DoSkip ->
+                Skip ->
                     skip game
 
-                DoAsk ->
+                Ask ->
                     ask game
 
-                DoAnswer ->
+                Answer ->
                     answer game
 
-                DoNext ->
+                Next ->
                     next game
     in
     ( nextGame, Cmd.none )
