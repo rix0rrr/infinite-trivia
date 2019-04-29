@@ -1,9 +1,9 @@
-module Main exposing (Game, Question, State(..), createGame, view, viewQuestion)
+module Main exposing (main)
 
 import Browser
 import Html exposing (Html)
 import Html.Attributes as Attribute
-
+import Html.Events as Event
 
 main =
     Browser.element
@@ -18,27 +18,37 @@ init : () -> ( Game, Cmd msg )
 init _ =
     let
         game =
-            createGame { category = "science", question = "how many planets does our solar system have", answer = "8" }
+            createGame defaultQuestion
     in
     ( game, Cmd.none )
 
 
-type State
-    = Category Question
-    | Ask Question
-    | Answer Question
+defaultQuestion : Question
+defaultQuestion =
+    { category = "science"
+    , question = "how many planets does our solar system have"
+    , answer = "8"
+    , stage = Category
+    }
+
+
+type QuestionStage
+    = Category
+    | Ask
+    | Answer
 
 
 type alias Question =
     { category : String
     , question : String
     , answer : String
+    , stage : QuestionStage
     }
 
 
 type alias Game =
     { seenQuestions : List Question
-    , currentStage : State
+    , currentQuestion : Question
     , futureQuestions : List Question
     }
 
@@ -46,32 +56,79 @@ type alias Game =
 createGame : Question -> Game
 createGame question =
     { seenQuestions = []
-    , currentStage = Category question
+    , currentQuestion = question
     , futureQuestions = []
     }
+
+
+skip : Game -> Game
+skip { seenQuestions, currentQuestion, futureQuestions } =
+    let
+        nextQuestion =
+            List.head futureQuestions
+                |> Maybe.withDefault defaultQuestion
+
+        nextFutureQuestions =
+            futureQuestions
+                |> List.tail
+                |> Maybe.withDefault []
+    in
+    { seenQuestions = currentQuestion :: seenQuestions
+    , currentQuestion = nextQuestion
+    , futureQuestions = nextFutureQuestions
+    }
+
+
+next : Game -> Game
+next =
+    skip
+
+
+ask : Game -> Game
+ask game =
+    let
+        currentQuestion =
+            game.currentQuestion
+
+        nextCurrentQuestion =
+            { currentQuestion | stage = Ask }
+    in
+    { game | currentQuestion = nextCurrentQuestion }
+
+
+answer : Game -> Game
+answer game =
+    let
+        currentQuestion =
+            game.currentQuestion
+
+        nextCurrentQuestion =
+            { currentQuestion | stage = Answer }
+    in
+    { game | currentQuestion = nextCurrentQuestion }
 
 
 
 -- VIEW
 
 
-view : Game -> Html msg
+view : Game -> Html Message
 view game =
-    viewQuestion game.currentStage
+    viewQuestion game.currentQuestion
 
 
-viewQuestion : State -> Html msg
-viewQuestion state =
+viewQuestion : Question -> Html Message
+viewQuestion question =
     let
         content =
-            case state of
-                Category question ->
+            case question.stage of
+                Category ->
                     viewCategory question
 
-                Ask question ->
+                Ask ->
                     viewAsk question
 
-                Answer question ->
+                Answer ->
                     viewAnswer question
     in
     Html.div []
@@ -79,19 +136,45 @@ viewQuestion state =
         ]
 
 
-viewCategory : Question -> Html msg
+viewCategory : Question -> Html Message
 viewCategory question =
-    Html.text question.category
+    Html.div []
+        [ Html.div []
+            [ Html.text question.category
+            ]
+        , Html.div [ Attribute.class "controls" ]
+            [ Html.button [ Event.onClick DoSkip ] [ Html.text "skip" ]
+            , Html.button [ Event.onClick DoAsk ] [ Html.text "ask" ]
+            ]
+        ]
 
 
-viewAsk : Question -> Html msg
+viewAsk : Question -> Html Message
 viewAsk question =
-    Html.text question.question
+    Html.div []
+        [ Html.div []
+            [ Html.div [] [ Html.text question.category ]
+            , Html.div [] [ Html.text question.question ]
+            ]
+        , Html.div [ Attribute.class "controls" ]
+            [ Html.button [ Event.onClick DoSkip] [ Html.text "skip" ]
+            , Html.button [ Event.onClick DoAnswer] [ Html.text "answer" ]
+            ]
+        ]
 
 
-viewAnswer : Question -> Html msg
+viewAnswer : Question -> Html Message
 viewAnswer question =
-    Html.text question.answer
+    Html.div []
+        [ Html.div []
+            [ Html.div [] [ Html.text question.category ]
+            , Html.div [] [ Html.text question.question ]
+            , Html.div [] [ Html.text question.answer ]
+            ]
+        , Html.div [ Attribute.class "controls" ]
+            [ Html.button [ Event.onClick DoNext ] [ Html.text "next" ]
+            ]
+        ]
 
 
 
@@ -99,12 +182,30 @@ viewAnswer question =
 
 
 type Message
-    = DoNothing
+    = DoSkip
+    | DoAsk
+    | DoAnswer
+    | DoNext
 
 
 update : Message -> Game -> ( Game, Cmd Message )
-update _ model =
-    ( model, Cmd.none )
+update message game =
+    let
+        nextGame =
+            case message of
+                DoSkip ->
+                    skip game
+
+                DoAsk ->
+                    ask game
+
+                DoAnswer ->
+                    answer game
+
+                DoNext ->
+                    next game
+    in
+    ( nextGame, Cmd.none )
 
 
 
