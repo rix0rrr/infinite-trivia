@@ -4,6 +4,10 @@ import Browser
 import Html exposing (Html)
 import Html.Attributes as Attribute
 import Html.Events as Event
+import Http
+import Json.Decode as Decode exposing (Decoder)
+import OpenTDB
+
 
 main =
     Browser.element
@@ -14,13 +18,21 @@ main =
         }
 
 
-init : () -> ( Game, Cmd msg )
+init : () -> ( Game, Cmd Message )
 init _ =
     let
         game =
             createGame defaultQuestion
     in
-    ( game, Cmd.none )
+    ( game, getFreshQuestions )
+
+
+getFreshQuestions : Cmd Message
+getFreshQuestions =
+    Http.get
+        { url = "https://opentdb.com/api.php?amount=10"
+        , expect = Http.expectJson GotQuestionBatch OpenTDB.responseDecoder
+        }
 
 
 defaultQuestion : Question
@@ -108,6 +120,15 @@ answer game =
     { game | currentQuestion = nextCurrentQuestion }
 
 
+toQuestion : OpenTDB.Question -> Question
+toQuestion { category, question, correctAnswer } =
+    { category = category
+    , question = question
+    , answer = correctAnswer
+    , stage = Category
+    }
+
+
 
 -- VIEW
 
@@ -157,8 +178,8 @@ viewAsk question =
             , Html.div [] [ Html.text question.question ]
             ]
         , Html.div [ Attribute.class "controls" ]
-            [ Html.button [ Event.onClick Skip] [ Html.text "skip" ]
-            , Html.button [ Event.onClick Answer] [ Html.text "answer" ]
+            [ Html.button [ Event.onClick Skip ] [ Html.text "skip" ]
+            , Html.button [ Event.onClick Answer ] [ Html.text "answer" ]
             ]
         ]
 
@@ -186,6 +207,7 @@ type Message
     | Ask
     | Answer
     | Next
+    | GotQuestionBatch (Result Http.Error OpenTDB.Response)
 
 
 update : Message -> Game -> ( Game, Cmd Message )
@@ -204,8 +226,30 @@ update message game =
 
                 Next ->
                     next game
+
+                GotQuestionBatch result ->
+                    case result of
+                        Ok response ->
+                            appendFutureQuestions response game
+
+                        Err error ->
+                            game
+
+        -- TODO: Handle error
     in
     ( nextGame, Cmd.none )
+
+
+appendFutureQuestions : OpenTDB.Response -> Game -> Game
+appendFutureQuestions { questions } game =
+    let
+        freshQuestions =
+            List.map toQuestion questions
+
+        nextFutureQuestions =
+            List.append game.futureQuestions freshQuestions
+    in
+    { game | futureQuestions = nextFutureQuestions }
 
 
 
