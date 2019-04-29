@@ -23,14 +23,6 @@ init _ =
     ( Nothing, OpenTDB.getFreshQuestions GotQuestionBatch )
 
 
-defaultQuestion : Question
-defaultQuestion =
-    { category = "science"
-    , question = "how many planets does our solar system have"
-    , answer = "8"
-    , stage = Category
-    }
-
 type QuestionStage
     = Category
     | Asking
@@ -68,25 +60,26 @@ createModel questions =
     List.head questions |> Maybe.map createGame
 
 
-skip : Game -> Game
+skip : Game -> Maybe Game
 skip { seenQuestions, currentQuestion, futureQuestions } =
-    let
-        nextQuestion =
-            List.head futureQuestions
-                |> Maybe.withDefault defaultQuestion
+    case List.head futureQuestions of
+        Just nextQuestion ->
+            let
+                nextFutureQuestions =
+                    futureQuestions
+                        |> List.tail
+                        |> Maybe.withDefault []
+            in
+            Just { seenQuestions = currentQuestion :: seenQuestions
+            , currentQuestion = nextQuestion
+            , futureQuestions = nextFutureQuestions
+            }
 
-        nextFutureQuestions =
-            futureQuestions
-                |> List.tail
-                |> Maybe.withDefault []
-    in
-    { seenQuestions = currentQuestion :: seenQuestions
-    , currentQuestion = nextQuestion
-    , futureQuestions = nextFutureQuestions
-    }
+        Nothing ->
+            Nothing
 
 
-next : Game -> Game
+next : Game -> Maybe Game
 next =
     skip
 
@@ -221,10 +214,10 @@ update message model =
                             skip game
 
                         Ask ->
-                            ask game
+                            Just <| ask game
 
                         Answer ->
-                            answer game
+                            Just <| answer game
 
                         Next ->
                             next game
@@ -232,20 +225,23 @@ update message model =
                         GotQuestionBatch result ->
                             case result of
                                 Ok response ->
-                                    appendFutureQuestions response game
+                                    Just (appendFutureQuestions response game)
 
                                 Err error ->
-                                    game
+                                    -- TODO: Handle error
+                                    Nothing
 
-                -- TODO: Handle error
                 nextCommand =
-                    if List.length nextGame.futureQuestions <= 2 then
-                        OpenTDB.getFreshQuestions GotQuestionBatch
-
-                    else
-                        Cmd.none
+                    -- TODO: On Nothing, try again? with expo backoff
+                    nextGame
+                    |> Maybe.andThen (\ng ->
+                        if List.length ng.futureQuestions <= 2 then
+                            Just <| OpenTDB.getFreshQuestions GotQuestionBatch
+                        else
+                            Nothing)
+                    |> Maybe.withDefault Cmd.none
             in
-            ( Just nextGame, nextCommand )
+            ( nextGame, nextCommand )
 
         Nothing ->
             case message of
