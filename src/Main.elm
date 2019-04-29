@@ -3,11 +3,12 @@ module Main exposing (main)
 import Bootstrap.CDN as CDN
 import Bootstrap.Grid as Grid
 import Browser
-import Html exposing (Html)
-import Html.Attributes as Attribute
-import Html.Events as Event
+import Html as PlainHtml
 import Html.Parser
 import Html.Parser.Util
+import Html.Styled as Html exposing (Html)
+import Html.Styled.Attributes as Attribute
+import Html.Styled.Events as Event
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -127,21 +128,25 @@ toQuestion { category, question, correctAnswer } =
 -- VIEW
 
 
-view : Model -> Html Message
+view : Model -> PlainHtml.Html Message
 view model =
     Grid.container []
         [ CDN.stylesheet
         , Grid.row []
             [ Grid.col []
-                [ case model of
-                    Just game ->
-                        viewQuestion game.currentQuestion
-
-                    Nothing ->
-                        Html.text "Loading..."
-                ]
+                [ Html.toUnstyled <| viewModel model ]
             ]
         ]
+
+
+viewModel : Model -> Html Message
+viewModel model =
+    case model of
+        Just game ->
+            viewQuestion game.currentQuestion
+
+        Nothing ->
+            Html.text "Loading..."
 
 
 viewQuestion : Question -> Html Message
@@ -207,9 +212,8 @@ literalHtml : String -> List (Html a)
 literalHtml s =
     Html.Parser.run s
         |> Result.map Html.Parser.Util.toVirtualDom
+        |> Result.map (List.map Html.fromUnstyled)
         |> Result.withDefault [ Html.text s ]
-
-
 
 -- UPDATE
 
