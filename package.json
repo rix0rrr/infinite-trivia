@@ -4,7 +4,7 @@
   "description": "A simple mobile client for infinitely many OpenTDB.com trivia questions. Play your own game!",
   "main": "index.js",
   "scripts": {
-    "make": "elm make src/Main.elm --output docs/index.html"
+    "make": "elm make src/Main.elm --output docs/js/trivia.js && cp -R static docs"
   },
   "repository": {
     "type": "git",

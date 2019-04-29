@@ -1,8 +1,7 @@
 module Main exposing (main)
 
-import Bootstrap.CDN as CDN
-import Bootstrap.Grid as Grid
 import Browser
+import Css exposing (..)
 import Html as PlainHtml
 import Html.Parser
 import Html.Parser.Util
@@ -18,7 +17,7 @@ import OpenTDB
 main =
     Browser.element
         { init = init
-        , view = view
+        , view = view >> Html.toUnstyled
         , update = update
         , subscriptions = subscriptions
         }
@@ -128,13 +127,28 @@ toQuestion { category, question, correctAnswer } =
 -- VIEW
 
 
-view : Model -> PlainHtml.Html Message
+view : Model -> Html Message
 view model =
-    Grid.container []
-        [ CDN.stylesheet
-        , Grid.row []
-            [ Grid.col []
-                [ Html.toUnstyled <| viewModel model ]
+    Html.div
+        [ Attribute.css
+            [ backgroundImage (url "/static/interlaced.png")
+            , backgroundRepeat repeat
+            , position absolute
+            , left (px 0)
+            , top (px 0)
+            , right (px 0)
+            , bottom (px 0)
+            ]
+        ]
+        [ -- Background div
+          Html.div
+            [ Attribute.css
+                [ maxWidth (px 768)
+                , margin2 (px 0) auto
+                ]
+            ]
+            [ -- Main div (play area)
+              viewModel model
             ]
         ]
 
@@ -171,8 +185,7 @@ viewQuestion question =
 viewCategory : Question -> Html Message
 viewCategory question =
     Html.div []
-        [ Html.div [] <|
-            literalHtml question.category
+        [ styleAsCard Back <| literalHtml question.category
         , Html.div [ Attribute.class "controls" ]
             [ Html.button [ Event.onClick Skip ] [ Html.text "skip" ]
             , Html.button [ Event.onClick Ask ] [ Html.text "ask" ]
@@ -183,7 +196,7 @@ viewCategory question =
 viewAsk : Question -> Html Message
 viewAsk question =
     Html.div []
-        [ Html.div []
+        [ styleAsCard Front
             [ Html.div [] <| literalHtml question.category
             , Html.div [] <| literalHtml question.question
             ]
@@ -197,7 +210,7 @@ viewAsk question =
 viewAnswer : Question -> Html Message
 viewAnswer question =
     Html.div []
-        [ Html.div []
+        [ styleAsCard Front
             [ Html.div [] <| literalHtml question.category
             , Html.div [] <| literalHtml question.question
             , Html.div [] <| literalHtml question.answer
@@ -214,6 +227,52 @@ literalHtml s =
         |> Result.map Html.Parser.Util.toVirtualDom
         |> Result.map (List.map Html.fromUnstyled)
         |> Result.withDefault [ Html.text s ]
+
+
+type CardFace
+    = Front
+    | Back
+
+
+styleAsCard : CardFace -> List (Html a) -> Html a
+styleAsCard face contents =
+    let
+        backgroundStyle =
+            case face of
+                Back ->
+                    backgroundImage (url "/static/kale-salad.jpg")
+
+                Front ->
+                    backgroundColor (hex "ffffff")
+
+        textColor =
+            case face of
+                Back ->
+                    hex "ffffff"
+
+                Front ->
+                    hex "000000"
+    in
+    Html.div
+        [ Attribute.css
+            [ backgroundStyle
+            , Css.boxShadow4 (px 0) (px 5) (px 8) (hex "000000")
+            , color textColor
+            , borderRadius (em 1)
+            , padding (em 4)
+            , margin (em 1)
+            , displayFlex
+            , flexDirection column
+            , justifyContent center
+            , alignItems center
+            , height (px 300)
+            , fontFamilies [ "georgia", "palatino" ]
+            , fontSize (pt 20)
+            ]
+        ]
+        contents
+
+
 
 -- UPDATE
 
