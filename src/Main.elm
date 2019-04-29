@@ -3,8 +3,8 @@ module Main exposing (main)
 import Browser
 import Html exposing (Html)
 import Html.Attributes as Attribute
-import Html.Events as Event
 import Http
+import Html.Events as Event
 import Json.Decode as Decode exposing (Decoder)
 import OpenTDB
 
@@ -24,15 +24,7 @@ init _ =
         game =
             createGame defaultQuestion
     in
-    ( game, getFreshQuestions )
-
-
-getFreshQuestions : Cmd Message
-getFreshQuestions =
-    Http.get
-        { url = "https://opentdb.com/api.php?amount=10"
-        , expect = Http.expectJson GotQuestionBatch OpenTDB.responseDecoder
-        }
+    ( game, OpenTDB.getFreshQuestions GotQuestionBatch )
 
 
 defaultQuestion : Question
@@ -236,8 +228,13 @@ update message game =
                             game
 
         -- TODO: Handle error
+        nextCommand =
+            if List.length nextGame.futureQuestions <= 2 then
+                OpenTDB.getFreshQuestions GotQuestionBatch
+            else
+                Cmd.none
     in
-    ( nextGame, Cmd.none )
+    ( nextGame, nextCommand )
 
 
 appendFutureQuestions : OpenTDB.Response -> Game -> Game

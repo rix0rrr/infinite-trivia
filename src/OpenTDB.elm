@@ -1,7 +1,8 @@
-module OpenTDB exposing (Question, decode, Response, responseDecoder)
+module OpenTDB exposing (Question, decode, Response, responseDecoder, getFreshQuestions)
 
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (..)
+import Http
 
 
 type alias Question =
@@ -30,6 +31,14 @@ type Difficulty
     | Medium
     | Hard
     | UnknownDifficulty
+
+
+getFreshQuestions : (Result Http.Error Response -> a) -> Cmd a
+getFreshQuestions m =
+    Http.get
+        { url = "https://opentdb.com/api.php?amount=10"
+        , expect = Http.expectJson m responseDecoder
+        }
 
 
 decode : String -> Result Decode.Error Response
