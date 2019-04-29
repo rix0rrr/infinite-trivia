@@ -3,8 +3,8 @@ module Main exposing (main)
 import Browser
 import Html exposing (Html)
 import Html.Attributes as Attribute
-import Http
 import Html.Events as Event
+import Http
 import Json.Decode as Decode exposing (Decoder)
 import OpenTDB
 
@@ -18,13 +18,9 @@ main =
         }
 
 
-init : () -> ( Game, Cmd Message )
+init : () -> ( Model, Cmd Message )
 init _ =
-    let
-        game =
-            createGame defaultQuestion
-    in
-    ( game, OpenTDB.getFreshQuestions GotQuestionBatch )
+    ( Nothing, OpenTDB.getFreshQuestions GotQuestionBatch )
 
 
 defaultQuestion : Question
@@ -34,7 +30,6 @@ defaultQuestion =
     , answer = "8"
     , stage = Category
     }
-
 
 type QuestionStage
     = Category
@@ -50,6 +45,10 @@ type alias Question =
     }
 
 
+type alias Model =
+    Maybe Game
+
+
 type alias Game =
     { seenQuestions : List Question
     , currentQuestion : Question
@@ -57,12 +56,16 @@ type alias Game =
     }
 
 
-createGame : Question -> Game
-createGame question =
-    { seenQuestions = []
-    , currentQuestion = question
-    , futureQuestions = []
-    }
+createModel : List Question -> Model
+createModel questions =
+    let
+        createGame firstQuestion =
+            { seenQuestions = []
+            , currentQuestion = firstQuestion
+            , futureQuestions = List.tail questions |> Maybe.withDefault []
+            }
+    in
+    List.head questions |> Maybe.map createGame
 
 
 skip : Game -> Game
@@ -125,9 +128,14 @@ toQuestion { category, question, correctAnswer } =
 -- VIEW
 
 
-view : Game -> Html Message
-view game =
-    viewQuestion game.currentQuestion
+view : Model -> Html Message
+view model =
+    case model of
+        Just game ->
+            viewQuestion game.currentQuestion
+
+        Nothing ->
+            Html.text "Loading..."
 
 
 viewQuestion : Question -> Html Message
@@ -202,49 +210,71 @@ type Message
     | GotQuestionBatch (Result Http.Error OpenTDB.Response)
 
 
-update : Message -> Game -> ( Game, Cmd Message )
-update message game =
-    let
-        nextGame =
+update : Message -> Model -> ( Model, Cmd Message )
+update message model =
+    case model of
+        Just game ->
+            let
+                nextGame =
+                    case message of
+                        Skip ->
+                            skip game
+
+                        Ask ->
+                            ask game
+
+                        Answer ->
+                            answer game
+
+                        Next ->
+                            next game
+
+                        GotQuestionBatch result ->
+                            case result of
+                                Ok response ->
+                                    appendFutureQuestions response game
+
+                                Err error ->
+                                    game
+
+                -- TODO: Handle error
+                nextCommand =
+                    if List.length nextGame.futureQuestions <= 2 then
+                        OpenTDB.getFreshQuestions GotQuestionBatch
+
+                    else
+                        Cmd.none
+            in
+            ( Just nextGame, nextCommand )
+
+        Nothing ->
             case message of
-                Skip ->
-                    skip game
-
-                Ask ->
-                    ask game
-
-                Answer ->
-                    answer game
-
-                Next ->
-                    next game
-
                 GotQuestionBatch result ->
                     case result of
                         Ok response ->
-                            appendFutureQuestions response game
+                            ( createModel (questionsFromResponse response), Cmd.none )
 
                         Err error ->
-                            game
+                            ( Nothing, Cmd.none )
 
-        -- TODO: Handle error
-        nextCommand =
-            if List.length nextGame.futureQuestions <= 2 then
-                OpenTDB.getFreshQuestions GotQuestionBatch
-            else
-                Cmd.none
-    in
-    ( nextGame, nextCommand )
+                _ ->
+                    ( Nothing, Cmd.none )
+
+
+
+-- FIXME: Handle error
+
+
+questionsFromResponse : OpenTDB.Response -> List Question
+questionsFromResponse { questions } =
+    List.map toQuestion questions
 
 
 appendFutureQuestions : OpenTDB.Response -> Game -> Game
-appendFutureQuestions { questions } game =
+appendFutureQuestions response game =
     let
-        freshQuestions =
-            List.map toQuestion questions
-
         nextFutureQuestions =
-            List.append game.futureQuestions freshQuestions
+            List.append game.futureQuestions (questionsFromResponse response)
     in
     { game | futureQuestions = nextFutureQuestions }
 
@@ -253,6 +283,6 @@ appendFutureQuestions { questions } game =
 -- SUBSCRIPTIONS
 
 
-subscriptions : Game -> Sub msg
+subscriptions : Model -> Sub msg
 subscriptions model =
     Sub.none
