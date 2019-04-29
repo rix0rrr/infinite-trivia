@@ -1,15 +1,18 @@
 module Main exposing (main)
 
+import Bootstrap.CDN as CDN
+import Bootstrap.Grid as Grid
 import Browser
 import Html exposing (Html)
 import Html.Attributes as Attribute
 import Html.Events as Event
+import Html.Parser
+import Html.Parser.Util
 import Http
 import Json.Decode as Decode exposing (Decoder)
+import Json.Encode as Encode
 import OpenTDB
 
-import Bootstrap.CDN as CDN
-import Bootstrap.Grid as Grid
 
 main =
     Browser.element
@@ -72,10 +75,11 @@ skip { seenQuestions, currentQuestion, futureQuestions } =
                         |> List.tail
                         |> Maybe.withDefault []
             in
-            Just { seenQuestions = currentQuestion :: seenQuestions
-            , currentQuestion = nextQuestion
-            , futureQuestions = nextFutureQuestions
-            }
+            Just
+                { seenQuestions = currentQuestion :: seenQuestions
+                , currentQuestion = nextQuestion
+                , futureQuestions = nextFutureQuestions
+                }
 
         Nothing ->
             Nothing
@@ -125,19 +129,19 @@ toQuestion { category, question, correctAnswer } =
 
 view : Model -> Html Message
 view model =
-    Grid.container [] [
-        CDN.stylesheet
-        , Grid.row [] [
-            Grid.col [] [
-                case model of
+    Grid.container []
+        [ CDN.stylesheet
+        , Grid.row []
+            [ Grid.col []
+                [ case model of
                     Just game ->
                         viewQuestion game.currentQuestion
 
                     Nothing ->
                         Html.text "Loading..."
+                ]
             ]
         ]
-    ]
 
 
 viewQuestion : Question -> Html Message
@@ -162,9 +166,8 @@ viewQuestion question =
 viewCategory : Question -> Html Message
 viewCategory question =
     Html.div []
-        [ Html.div []
-            [ Html.text question.category
-            ]
+        [ Html.div [] <|
+            literalHtml question.category
         , Html.div [ Attribute.class "controls" ]
             [ Html.button [ Event.onClick Skip ] [ Html.text "skip" ]
             , Html.button [ Event.onClick Ask ] [ Html.text "ask" ]
@@ -176,8 +179,8 @@ viewAsk : Question -> Html Message
 viewAsk question =
     Html.div []
         [ Html.div []
-            [ Html.div [] [ Html.text question.category ]
-            , Html.div [] [ Html.text question.question ]
+            [ Html.div [] <| literalHtml question.category
+            , Html.div [] <| literalHtml question.question
             ]
         , Html.div [ Attribute.class "controls" ]
             [ Html.button [ Event.onClick Skip ] [ Html.text "skip" ]
@@ -190,14 +193,21 @@ viewAnswer : Question -> Html Message
 viewAnswer question =
     Html.div []
         [ Html.div []
-            [ Html.div [] [ Html.text question.category ]
-            , Html.div [] [ Html.text question.question ]
-            , Html.div [] [ Html.text question.answer ]
+            [ Html.div [] <| literalHtml question.category
+            , Html.div [] <| literalHtml question.question
+            , Html.div [] <| literalHtml question.answer
             ]
         , Html.div [ Attribute.class "controls" ]
             [ Html.button [ Event.onClick Next ] [ Html.text "next" ]
             ]
         ]
+
+
+literalHtml : String -> List (Html a)
+literalHtml s =
+    Html.Parser.run s
+        |> Result.map Html.Parser.Util.toVirtualDom
+        |> Result.withDefault [ Html.text s ]
 
 
 
@@ -243,12 +253,15 @@ update message model =
                 nextCommand =
                     -- TODO: On Nothing, try again? with expo backoff
                     nextGame
-                    |> Maybe.andThen (\ng ->
-                        if List.length ng.futureQuestions <= 2 then
-                            Just <| OpenTDB.getFreshQuestions GotQuestionBatch
-                        else
-                            Nothing)
-                    |> Maybe.withDefault Cmd.none
+                        |> Maybe.andThen
+                            (\ng ->
+                                if List.length ng.futureQuestions <= 2 then
+                                    Just <| OpenTDB.getFreshQuestions GotQuestionBatch
+
+                                else
+                                    Nothing
+                            )
+                        |> Maybe.withDefault Cmd.none
             in
             ( nextGame, nextCommand )
 
