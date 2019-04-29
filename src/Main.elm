@@ -8,6 +8,8 @@ import Http
 import Json.Decode as Decode exposing (Decoder)
 import OpenTDB
 
+import Bootstrap.CDN as CDN
+import Bootstrap.Grid as Grid
 
 main =
     Browser.element
@@ -123,12 +125,19 @@ toQuestion { category, question, correctAnswer } =
 
 view : Model -> Html Message
 view model =
-    case model of
-        Just game ->
-            viewQuestion game.currentQuestion
+    Grid.container [] [
+        CDN.stylesheet
+        , Grid.row [] [
+            Grid.col [] [
+                case model of
+                    Just game ->
+                        viewQuestion game.currentQuestion
 
-        Nothing ->
-            Html.text "Loading..."
+                    Nothing ->
+                        Html.text "Loading..."
+            ]
+        ]
+    ]
 
 
 viewQuestion : Question -> Html Message
