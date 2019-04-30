@@ -23,32 +23,16 @@ main =
 
 init : () -> ( Model, Cmd Message )
 init _ =
-    let
-        model =
-            emptyModel
-                |> updateStatus Loading
-    in
-    ( model, OpenTDB.getFreshQuestions GotQuestionBatch )
+    ( Loading, OpenTDB.getFreshQuestions GotQuestionBatch )
 
 
-type alias Model =
-    { game : Maybe Game
-    , status : Status
-    }
-
-
-type Status
-    = Idle
-    | Loading
-    | FetchError
-    | Nominal
-
-
-emptyModel : Model
-emptyModel =
-    { game = Nothing
-    , status = Idle
-    }
+type Model
+    = Loading
+    | Nominal Game
+    | InsufficientQuestions
+    | InitialFetchError Http.Error
+    | StarvedForQuestions Game
+    | ProgressiveFetchError Http.Error Game
 
 
 type alias Game =
@@ -70,16 +54,6 @@ type QuestionStage
     = Category
     | Asking
     | Answering
-
-
-createModel : Status -> Maybe Game -> Model
-createModel status game =
-    { game = game, status = status }
-
-
-updateStatus : Status -> Model -> Model
-updateStatus status model =
-    { model | status = status }
 
 
 gameFromList : List Question -> Maybe Game
@@ -173,32 +147,27 @@ view model =
 
 viewModel : Model -> Html Message
 viewModel model =
-    case model.game of
-        Just game ->
+    case model of
+        Loading ->
+            Html.text "Loading..."
+
+        Nominal game ->
             viewQuestion game.currentQuestion
 
-        Nothing ->
-            viewStatus model.status
+        InitialFetchError _ ->
+            Html.text "Could not load questions. Reload the app."
 
-viewStatus : Status -> Html msg
-viewStatus status =
-    let
-        text =
-            case status of
-                Idle ->
-                    "Idling..."
+        ProgressiveFetchError _ game ->
+            -- TODO: show problem with loading more questions
+            viewQuestion game.currentQuestion
 
-                Loading ->
-                    "Loading..."
+        InsufficientQuestions ->
+            Html.text "Could not load enough questions. Reload the app."
 
-                FetchError ->
-                    "Something went wrong. Try reloading the app."
+        StarvedForQuestions game ->
+            -- TODO: show problem with loading more questions
+            viewQuestion game.currentQuestion
 
-                Nominal ->
-                    "All is well"
-
-    in
-        Html.text text
 
 viewQuestion : Question -> Html Message
 viewQuestion question =
@@ -298,51 +267,30 @@ type Message
 
 update : Message -> Model -> ( Model, Cmd Message )
 update message model =
-    case model.game of
-        Just game ->
-            let
-                nextGame =
-                    case message of
-                        Skip ->
-                            skip game
+    case model of
+        Loading ->
+            updateWithoutAGame message model
 
-                        Ask ->
-                            Just <| ask game
+        Nominal game ->
+            updateWithAGame game message model
 
-                        Answer ->
-                            Just <| answer game
+        InsufficientQuestions ->
+            updateWithoutAGame message model
 
-                        Next ->
-                            next game
+        InitialFetchError _ ->
+            updateWithoutAGame message model
 
-                        GotQuestionBatch result ->
-                            case result of
-                                Ok response ->
-                                    Just (appendFutureQuestions response game)
+        ProgressiveFetchError _ game ->
+            updateWithAGame game message model
 
-                                Err error ->
-                                    Nothing
+        StarvedForQuestions game ->
+            updateWithAGame game message model
 
-                nextStatus =
-                    nextGame
-                        |> Maybe.map (\_ -> Nominal)
-                        |> Maybe.withDefault FetchError
 
-                nextCommand =
-                    nextGame
-                        |> Maybe.andThen
-                            (\ng ->
-                                if List.length ng.futureQuestions <= 2 then
-                                    Just <| OpenTDB.getFreshQuestions GotQuestionBatch
-
-                                else
-                                    Nothing
-                            )
-                        |> Maybe.withDefault Cmd.none
-            in
-            ( { model | game = nextGame, status = nextStatus }, nextCommand )
-
-        Nothing ->
+updateWithoutAGame : Message -> Model -> ( Model, Cmd Message )
+updateWithoutAGame message model =
+    let
+        nextModel =
             case message of
                 GotQuestionBatch result ->
                     case result of
@@ -354,13 +302,65 @@ update message model =
                                 game =
                                     gameFromList questions
                             in
-                            ( createModel Nominal game, Cmd.none )
+                            game
+                                |> Maybe.map Nominal
+                                |> Maybe.withDefault InsufficientQuestions
 
                         Err error ->
-                            ( updateStatus FetchError model, Cmd.none )
+                            InitialFetchError error
 
                 _ ->
-                    ( emptyModel, Cmd.none )
+                    model
+    in
+    ( nextModel, Cmd.none )
+
+
+updateWithAGame : Game -> Message -> Model -> ( Model, Cmd Message )
+updateWithAGame game message model =
+    let
+        nextModel =
+            case message of
+                Skip ->
+                    skip game
+                        |> Maybe.map Nominal
+                        |> Maybe.withDefault (StarvedForQuestions game)
+
+                Ask ->
+                    Nominal <| ask game
+
+                Answer ->
+                    Nominal <| answer game
+
+                Next ->
+                    next game
+                        |> Maybe.map Nominal
+                        |> Maybe.withDefault (StarvedForQuestions game)
+
+                GotQuestionBatch result ->
+                    case result of
+                        Ok response ->
+                            Nominal <| appendFutureQuestions response game
+
+                        Err error ->
+                            ProgressiveFetchError error game
+
+        nextCommand =
+            case nextModel of
+                -- TODO: are these all when we need to fetch next questions
+                StarvedForQuestions _ ->
+                    OpenTDB.getFreshQuestions GotQuestionBatch
+
+                Nominal ng ->
+                    if List.length ng.futureQuestions <= 2 then
+                        OpenTDB.getFreshQuestions GotQuestionBatch
+
+                    else
+                        Cmd.none
+
+                _ ->
+                    Cmd.none
+    in
+    ( nextModel, nextCommand )
 
 
 questionsFromResponse : OpenTDB.Response -> List Question
