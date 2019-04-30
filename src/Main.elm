@@ -183,48 +183,66 @@ viewQuestion question =
                 Answering ->
                     viewAnswer question
     in
-    Html.div []
-        [ content
-        ]
+    Html.div [] content
 
 
-viewCategory : Question -> Html Message
+viewCategory : Question -> List (Html Message)
 viewCategory question =
-    Html.div []
-        [ styleAsCard Back <| literalHtml question.category
-        , Html.div [ Attribute.class "controls" ]
-            [ Html.button [ Attribute.class "btn-skip", Event.onClick Skip ] [ Html.text "skip" ]
-            , Html.button [ Attribute.class "btn-ask", Event.onClick Ask ] [ Html.text "ask" ]
-            ]
+    [ viewCard question Category
+    , Html.div [ Attribute.class "controls" ]
+        [ Html.button [ Attribute.class "btn-skip", Event.onClick Skip ] [ Html.text "skip" ]
+        , Html.button [ Attribute.class "btn-ask", Event.onClick Ask ] [ Html.text "ask" ]
+        ]
+    ]
+
+
+viewCard : Question -> QuestionStage -> Html Message
+viewCard question stage =
+    flippableCard (stage /= Category) (viewCardFront question stage) (viewCardBack question)
+
+
+viewCardBack : Question -> List (Html Message)
+viewCardBack question =
+    literalHtml question.category
+
+
+viewCardFront : Question -> QuestionStage -> List (Html Message)
+viewCardFront question stage =
+    List.concat
+        [ if stage == Asking || stage == Answering then
+            [ Html.div [ Attribute.class "txt-category" ] <| literalHtml question.category ]
+
+          else
+            []
+        , if stage == Asking || stage == Answering then
+            [ Html.div [ Attribute.class "txt-question" ] <| literalHtml question.question ]
+
+          else
+            []
+        , if stage == Answering then
+            [Html.div [ Attribute.class "txt-answer" ] <| literalHtml question.answer]
+          else
+            []
         ]
 
 
-viewAsk : Question -> Html Message
+viewAsk : Question -> List (Html Message)
 viewAsk question =
-    Html.div []
-        [ styleAsCard Front
-            [ Html.div [ Attribute.class "txt-category" ] <| literalHtml question.category
-            , Html.div [ Attribute.class "txt-question" ] <| literalHtml question.question
-            ]
-        , Html.div [ Attribute.class "controls" ]
-            [ Html.button [ Attribute.class "btn-skip", Event.onClick Skip ] [ Html.text "skip" ]
-            , Html.button [ Attribute.class "btn-answer", Event.onClick Answer ] [ Html.text "answer" ]
-            ]
+    [ viewCard question Asking
+    , Html.div [ Attribute.class "controls" ]
+        [ Html.button [ Attribute.class "btn-skip", Event.onClick Skip ] [ Html.text "skip" ]
+        , Html.button [ Attribute.class "btn-answer", Event.onClick Answer ] [ Html.text "answer" ]
         ]
+    ]
 
 
-viewAnswer : Question -> Html Message
+viewAnswer : Question -> List (Html Message)
 viewAnswer question =
-    Html.div []
-        [ styleAsCard Front
-            [ Html.div [ Attribute.class "txt-category" ] <| literalHtml question.category
-            , Html.div [ Attribute.class "txt-question" ] <| literalHtml question.question
-            , Html.div [ Attribute.class "txt-answer" ] <| literalHtml question.answer
-            ]
-        , Html.div [ Attribute.class "controls" ]
-            [ Html.button [ Attribute.class "btn-next", Event.onClick Next ] [ Html.text "next" ]
-            ]
+    [ viewCard question Answering
+    , Html.div [ Attribute.class "controls" ]
+        [ Html.button [ Attribute.class "btn-next", Event.onClick Next ] [ Html.text "next" ]
         ]
+    ]
 
 
 literalHtml : String -> List (Html a)
@@ -251,6 +269,13 @@ styleAsCard face contents =
                     "card-front"
         ]
         contents
+
+
+flippableCard : Bool -> List (Html a) -> List (Html a) -> Html a
+flippableCard flipped front back =
+    Html.div
+        [ Attribute.classList [ ( "flippable-card", True ), ( "flipped", flipped ) ] ]
+        [ styleAsCard Front front, styleAsCard Back back ]
 
 
 

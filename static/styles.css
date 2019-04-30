@@ -15,7 +15,9 @@ body {
   max-width: 100%;
   margin: 0px auto;
   padding: 10px;
-  overflow: hidden;
+
+  /* For the 3d flip */
+  perspective: 1000px;
 }
 
 .card-front {
@@ -98,4 +100,31 @@ body {
 .btn-ask {
   background: #980FCF;
   color: white;
+}
+
+.flippable-card {
+  position: relative;
+  transition: transform 0.6s;
+  transform-style: preserve-3d;
+  height: 70vh;
+}
+
+.flippable-card.flipped {
+  transform: rotateY(180deg);
+}
+
+.flippable-card .card-front, .flippable-card .card-back {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  backface-visibility: hidden;
+}
+
+.flippable-card .card-front {
+  transform: rotateY(180deg);
+  z-index: 1;
+}
+
+.flippable-card .card-back {
+  z-index: 2;
 }
