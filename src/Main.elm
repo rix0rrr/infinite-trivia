@@ -25,17 +25,31 @@ main =
 
 init : () -> ( Model, Cmd Message )
 init _ =
-    ( emptyModel, OpenTDB.getFreshQuestions GotQuestionBatch )
+    let
+        model =
+            emptyModel
+                |> updateStatus Loading
+    in
+    ( model, OpenTDB.getFreshQuestions GotQuestionBatch )
 
 
 type alias Model =
     { game : Maybe Game
+    , status : Status
     }
+
+
+type Status
+    = Idle
+    | Loading
+    | FetchError
+    | Nominal
 
 
 emptyModel : Model
 emptyModel =
     { game = Nothing
+    , status = Idle
     }
 
 
@@ -60,21 +74,29 @@ type QuestionStage
     | Answering
 
 
-createModel : List Question -> Model
-createModel questions =
+createModel : Status -> Maybe Game -> Model
+createModel status game =
+    { game = game, status = status }
+
+
+updateStatus : Status -> Model -> Model
+updateStatus status model =
+    { model | status = status }
+
+
+gameFromList : List Question -> Maybe Game
+gameFromList questions =
     let
         createGameWith =
             questions
                 |> List.tail
                 |> Maybe.withDefault []
                 |> createGame
-
-        game =
-            questions
-            |> List.head
-            |> Maybe.map createGameWith
     in
-        { game = game }
+    questions
+        |> List.head
+        |> Maybe.map createGameWith
+
 
 createGame : List Question -> Question -> Game
 createGame futureQuestions firstQuestion =
@@ -329,11 +351,14 @@ update message model =
                                     Just (appendFutureQuestions response game)
 
                                 Err error ->
-                                    -- TODO: Handle error
                                     Nothing
 
+                nextStatus =
+                    nextGame
+                        |> Maybe.map (\_ -> Nominal)
+                        |> Maybe.withDefault FetchError
+
                 nextCommand =
-                    -- TODO: On Nothing, try again? with expo backoff
                     nextGame
                         |> Maybe.andThen
                             (\ng ->
@@ -345,24 +370,27 @@ update message model =
                             )
                         |> Maybe.withDefault Cmd.none
             in
-            ( {model | game = nextGame }, nextCommand )
+            ( { model | game = nextGame, status = nextStatus }, nextCommand )
 
         Nothing ->
             case message of
                 GotQuestionBatch result ->
                     case result of
                         Ok response ->
-                            ( createModel (questionsFromResponse response), Cmd.none )
+                            let
+                                questions =
+                                    questionsFromResponse response
+
+                                game =
+                                    gameFromList questions
+                            in
+                            ( createModel Nominal game, Cmd.none )
 
                         Err error ->
-                            ( emptyModel, Cmd.none )
+                            ( updateStatus FetchError model, Cmd.none )
 
                 _ ->
                     ( emptyModel, Cmd.none )
-
-
-
--- FIXME: Handle error
 
 
 questionsFromResponse : OpenTDB.Response -> List Question
