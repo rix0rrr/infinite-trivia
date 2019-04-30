@@ -2488,6 +2488,23 @@ function _Http_track(router, xhr, tracker)
 	});
 }
 
+function _Url_percentEncode(string)
+{
+	return encodeURIComponent(string);
+}
+
+function _Url_percentDecode(string)
+{
+	try
+	{
+		return elm$core$Maybe$Just(decodeURIComponent(string));
+	}
+	catch (e)
+	{
+		return elm$core$Maybe$Nothing;
+	}
+}
+
 
 
 // STRINGS
@@ -5178,6 +5195,8 @@ function _Browser_load(url)
 var author$project$Main$GotQuestionBatch = function (a) {
 	return {$: 'GotQuestionBatch', a: a};
 };
+var elm$core$Maybe$Nothing = {$: 'Nothing'};
+var author$project$Main$emptyModel = {game: elm$core$Maybe$Nothing};
 var elm$core$Basics$apR = F2(
 	function (x, f) {
 		return f(x);
@@ -5433,7 +5452,6 @@ var elm$core$Array$initialize = F2(
 var elm$core$Maybe$Just = function (a) {
 	return {$: 'Just', a: a};
 };
-var elm$core$Maybe$Nothing = {$: 'Nothing'};
 var elm$core$Result$Err = function (a) {
 	return {$: 'Err', a: a};
 };
@@ -6620,16 +6638,70 @@ var elm$http$Http$get = function (r) {
 	return elm$http$Http$request(
 		{body: elm$http$Http$emptyBody, expect: r.expect, headers: _List_Nil, method: 'GET', timeout: elm$core$Maybe$Nothing, tracker: elm$core$Maybe$Nothing, url: r.url});
 };
+var elm$core$List$map = F2(
+	function (f, xs) {
+		return A3(
+			elm$core$List$foldr,
+			F2(
+				function (x, acc) {
+					return A2(
+						elm$core$List$cons,
+						f(x),
+						acc);
+				}),
+			_List_Nil,
+			xs);
+	});
+var elm$url$Url$Builder$toQueryPair = function (_n0) {
+	var key = _n0.a;
+	var value = _n0.b;
+	return key + ('=' + value);
+};
+var elm$url$Url$Builder$toQuery = function (parameters) {
+	if (!parameters.b) {
+		return '';
+	} else {
+		return '?' + A2(
+			elm$core$String$join,
+			'&',
+			A2(elm$core$List$map, elm$url$Url$Builder$toQueryPair, parameters));
+	}
+};
+var elm$url$Url$Builder$crossOrigin = F3(
+	function (prePath, pathSegments, parameters) {
+		return prePath + ('/' + (A2(elm$core$String$join, '/', pathSegments) + elm$url$Url$Builder$toQuery(parameters)));
+	});
+var elm$url$Url$percentEncode = _Url_percentEncode;
+var elm$url$Url$Builder$QueryParameter = F2(
+	function (a, b) {
+		return {$: 'QueryParameter', a: a, b: b};
+	});
+var elm$url$Url$Builder$int = F2(
+	function (key, value) {
+		return A2(
+			elm$url$Url$Builder$QueryParameter,
+			elm$url$Url$percentEncode(key),
+			elm$core$String$fromInt(value));
+	});
 var author$project$OpenTDB$getFreshQuestions = function (m) {
+	var url = A3(
+		elm$url$Url$Builder$crossOrigin,
+		'https://opentdb.com',
+		_List_fromArray(
+			['api.php']),
+		_List_fromArray(
+			[
+				A2(elm$url$Url$Builder$int, 'amount', 10)
+			]));
 	return elm$http$Http$get(
 		{
 			expect: A2(elm$http$Http$expectJson, m, author$project$OpenTDB$responseDecoder),
-			url: 'https://opentdb.com/api.php?amount=10'
+			url: url
 		});
 };
 var author$project$Main$init = function (_n0) {
 	return _Utils_Tuple2(
-		elm$core$Maybe$Nothing,
+		author$project$Main$emptyModel,
 		author$project$OpenTDB$getFreshQuestions(author$project$Main$GotQuestionBatch));
 };
 var elm$core$Platform$Sub$batch = _Platform_batch;
@@ -6654,20 +6726,6 @@ var author$project$Main$toQuestion = function (_n0) {
 	var correctAnswer = _n0.correctAnswer;
 	return {answer: correctAnswer, category: category, question: question, stage: author$project$Main$Category};
 };
-var elm$core$List$map = F2(
-	function (f, xs) {
-		return A3(
-			elm$core$List$foldr,
-			F2(
-				function (x, acc) {
-					return A2(
-						elm$core$List$cons,
-						f(x),
-						acc);
-				}),
-			_List_Nil,
-			xs);
-	});
 var author$project$Main$questionsFromResponse = function (_n0) {
 	var questions = _n0.questions;
 	return A2(elm$core$List$map, author$project$Main$toQuestion, questions);
@@ -6700,6 +6758,10 @@ var author$project$Main$ask = function (game) {
 		game,
 		{currentQuestion: nextCurrentQuestion});
 };
+var author$project$Main$createGame = F2(
+	function (futureQuestions, firstQuestion) {
+		return {currentQuestion: firstQuestion, futureQuestions: futureQuestions, seenQuestions: _List_Nil};
+	});
 var elm$core$List$head = function (list) {
 	if (list.b) {
 		var x = list.a;
@@ -6738,20 +6800,16 @@ var elm$core$Maybe$withDefault = F2(
 		}
 	});
 var author$project$Main$createModel = function (questions) {
-	var createGame = function (firstQuestion) {
-		return {
-			currentQuestion: firstQuestion,
-			futureQuestions: A2(
-				elm$core$Maybe$withDefault,
-				_List_Nil,
-				elm$core$List$tail(questions)),
-			seenQuestions: _List_Nil
-		};
-	};
-	return A2(
+	var createGameWith = author$project$Main$createGame(
+		A2(
+			elm$core$Maybe$withDefault,
+			_List_Nil,
+			elm$core$List$tail(questions)));
+	var game = A2(
 		elm$core$Maybe$map,
-		createGame,
+		createGameWith,
 		elm$core$List$head(questions));
+	return {game: game};
 };
 var author$project$Main$skip = function (_n0) {
 	var seenQuestions = _n0.seenQuestions;
@@ -6788,8 +6846,9 @@ var elm$core$Platform$Cmd$batch = _Platform_batch;
 var elm$core$Platform$Cmd$none = elm$core$Platform$Cmd$batch(_List_Nil);
 var author$project$Main$update = F2(
 	function (message, model) {
-		if (model.$ === 'Just') {
-			var game = model.a;
+		var _n0 = model.game;
+		if (_n0.$ === 'Just') {
+			var game = _n0.a;
 			var nextGame = function () {
 				switch (message.$) {
 					case 'Skip':
@@ -6824,7 +6883,11 @@ var author$project$Main$update = F2(
 							author$project$OpenTDB$getFreshQuestions(author$project$Main$GotQuestionBatch)) : elm$core$Maybe$Nothing;
 					},
 					nextGame));
-			return _Utils_Tuple2(nextGame, nextCommand);
+			return _Utils_Tuple2(
+				_Utils_update(
+					model,
+					{game: nextGame}),
+				nextCommand);
 		} else {
 			if (message.$ === 'GotQuestionBatch') {
 				var result = message.a;
@@ -6836,10 +6899,10 @@ var author$project$Main$update = F2(
 						elm$core$Platform$Cmd$none);
 				} else {
 					var error = result.a;
-					return _Utils_Tuple2(elm$core$Maybe$Nothing, elm$core$Platform$Cmd$none);
+					return _Utils_Tuple2(author$project$Main$emptyModel, elm$core$Platform$Cmd$none);
 				}
 			} else {
-				return _Utils_Tuple2(elm$core$Maybe$Nothing, elm$core$Platform$Cmd$none);
+				return _Utils_Tuple2(author$project$Main$emptyModel, elm$core$Platform$Cmd$none);
 			}
 		}
 	});
@@ -12739,8 +12802,9 @@ var author$project$Main$viewQuestion = function (question) {
 			[content]));
 };
 var author$project$Main$viewModel = function (model) {
-	if (model.$ === 'Just') {
-		var game = model.a;
+	var _n0 = model.game;
+	if (_n0.$ === 'Just') {
+		var game = _n0.a;
 		return author$project$Main$viewQuestion(game.currentQuestion);
 	} else {
 		return rtfeldman$elm_css$Html$Styled$text('Loading...');
