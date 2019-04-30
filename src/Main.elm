@@ -25,13 +25,25 @@ main =
 
 init : () -> ( Model, Cmd Message )
 init _ =
-    ( Nothing, OpenTDB.getFreshQuestions GotQuestionBatch )
+    ( emptyModel, OpenTDB.getFreshQuestions GotQuestionBatch )
 
 
-type QuestionStage
-    = Category
-    | Asking
-    | Answering
+type alias Model =
+    { game : Maybe Game
+    }
+
+
+emptyModel : Model
+emptyModel =
+    { game = Nothing
+    }
+
+
+type alias Game =
+    { seenQuestions : List Question
+    , currentQuestion : Question
+    , futureQuestions : List Question
+    }
 
 
 type alias Question =
@@ -42,27 +54,34 @@ type alias Question =
     }
 
 
-type alias Model =
-    Maybe Game
-
-
-type alias Game =
-    { seenQuestions : List Question
-    , currentQuestion : Question
-    , futureQuestions : List Question
-    }
+type QuestionStage
+    = Category
+    | Asking
+    | Answering
 
 
 createModel : List Question -> Model
 createModel questions =
     let
-        createGame firstQuestion =
-            { seenQuestions = []
-            , currentQuestion = firstQuestion
-            , futureQuestions = List.tail questions |> Maybe.withDefault []
-            }
+        createGameWith =
+            questions
+                |> List.tail
+                |> Maybe.withDefault []
+                |> createGame
+
+        game =
+            questions
+            |> List.head
+            |> Maybe.map createGameWith
     in
-    List.head questions |> Maybe.map createGame
+        { game = game }
+
+createGame : List Question -> Question -> Game
+createGame futureQuestions firstQuestion =
+    { seenQuestions = []
+    , currentQuestion = firstQuestion
+    , futureQuestions = futureQuestions
+    }
 
 
 skip : Game -> Maybe Game
@@ -155,7 +174,7 @@ view model =
 
 viewModel : Model -> Html Message
 viewModel model =
-    case model of
+    case model.game of
         Just game ->
             viewQuestion game.currentQuestion
 
@@ -287,7 +306,7 @@ type Message
 
 update : Message -> Model -> ( Model, Cmd Message )
 update message model =
-    case model of
+    case model.game of
         Just game ->
             let
                 nextGame =
@@ -326,7 +345,7 @@ update message model =
                             )
                         |> Maybe.withDefault Cmd.none
             in
-            ( nextGame, nextCommand )
+            ( {model | game = nextGame }, nextCommand )
 
         Nothing ->
             case message of
@@ -336,10 +355,10 @@ update message model =
                             ( createModel (questionsFromResponse response), Cmd.none )
 
                         Err error ->
-                            ( Nothing, Cmd.none )
+                            ( emptyModel, Cmd.none )
 
                 _ ->
-                    ( Nothing, Cmd.none )
+                    ( emptyModel, Cmd.none )
 
 
 
