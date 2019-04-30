@@ -1,13 +1,11 @@
 module Main exposing (main)
 
 import Browser
-import Css exposing (..)
-import Html as PlainHtml
+import Html exposing (Html)
+import Html.Attributes as Attribute
+import Html.Events as Event
 import Html.Parser
 import Html.Parser.Util
-import Html.Styled as Html exposing (Html)
-import Html.Styled.Attributes as Attribute
-import Html.Styled.Events as Event
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -17,7 +15,7 @@ import OpenTDB
 main =
     Browser.element
         { init = init
-        , view = view >> Html.toUnstyled
+        , view = view
         , update = update
         , subscriptions = subscriptions
         }
@@ -170,28 +168,7 @@ toQuestion { category, question, correctAnswer } =
 
 view : Model -> Html Message
 view model =
-    Html.div
-        [ Attribute.css
-            [ backgroundImage (url "/static/interlaced.png")
-            , backgroundRepeat repeat
-            , position absolute
-            , left (px 0)
-            , top (px 0)
-            , right (px 0)
-            , bottom (px 0)
-            ]
-        ]
-        [ -- Background div
-          Html.div
-            [ Attribute.css
-                [ maxWidth (px 768)
-                , margin2 (px 0) auto
-                ]
-            ]
-            [ -- Main div (play area)
-              viewModel model
-            ]
-        ]
+    Html.div [ Attribute.class "main" ] [ viewModel model ]
 
 
 viewModel : Model -> Html Message
@@ -257,8 +234,8 @@ viewAsk : Question -> Html Message
 viewAsk question =
     Html.div []
         [ styleAsCard Front
-            [ Html.div [] <| literalHtml question.category
-            , Html.div [] <| literalHtml question.question
+            [ Html.div [ Attribute.class "txt-category" ] <| literalHtml question.category
+            , Html.div [ Attribute.class "txt-question" ] <| literalHtml question.question
             ]
         , Html.div [ Attribute.class "controls" ]
             [ Html.button [ Event.onClick Skip ] [ Html.text "skip" ]
@@ -271,9 +248,9 @@ viewAnswer : Question -> Html Message
 viewAnswer question =
     Html.div []
         [ styleAsCard Front
-            [ Html.div [] <| literalHtml question.category
-            , Html.div [] <| literalHtml question.question
-            , Html.div [] <| literalHtml question.answer
+            [ Html.div [ Attribute.class "txt-category" ] <| literalHtml question.category
+            , Html.div [ Attribute.class "txt-question" ] <| literalHtml question.question
+            , Html.div [ Attribute.class "txt-answer" ] <| literalHtml question.answer
             ]
         , Html.div [ Attribute.class "controls" ]
             [ Html.button [ Event.onClick Next ] [ Html.text "next" ]
@@ -285,7 +262,6 @@ literalHtml : String -> List (Html a)
 literalHtml s =
     Html.Parser.run s
         |> Result.map Html.Parser.Util.toVirtualDom
-        |> Result.map (List.map Html.fromUnstyled)
         |> Result.withDefault [ Html.text s ]
 
 
@@ -296,39 +272,14 @@ type CardFace
 
 styleAsCard : CardFace -> List (Html a) -> Html a
 styleAsCard face contents =
-    let
-        backgroundStyle =
-            case face of
-                Back ->
-                    backgroundImage (url "/static/kale-salad.jpg")
-
-                Front ->
-                    backgroundColor (hex "ffffff")
-
-        textColor =
-            case face of
-                Back ->
-                    hex "ffffff"
-
-                Front ->
-                    hex "000000"
-    in
     Html.div
-        [ Attribute.css
-            [ backgroundStyle
-            , Css.boxShadow4 (px 0) (px 5) (px 8) (hex "000000")
-            , color textColor
-            , borderRadius (em 1)
-            , padding (em 4)
-            , margin (em 1)
-            , displayFlex
-            , flexDirection column
-            , justifyContent center
-            , alignItems center
-            , height (px 300)
-            , fontFamilies [ "georgia", "palatino" ]
-            , fontSize (pt 20)
-            ]
+        [ Attribute.class <|
+            case face of
+                Back ->
+                    "card-back"
+
+                Front ->
+                    "card-front"
         ]
         contents
 
