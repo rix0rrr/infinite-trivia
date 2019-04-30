@@ -185,7 +185,7 @@ viewStatus status =
     let
         text =
             case status of
-                Idle -> 
+                Idle ->
                     "Idling..."
 
                 Loading ->
@@ -224,8 +224,8 @@ viewCategory question =
     Html.div []
         [ styleAsCard Back <| literalHtml question.category
         , Html.div [ Attribute.class "controls" ]
-            [ Html.button [ Event.onClick Skip ] [ Html.text "skip" ]
-            , Html.button [ Event.onClick Ask ] [ Html.text "ask" ]
+            [ Html.button [ Attribute.class "btn-skip", Event.onClick Skip ] [ Html.text "skip" ]
+            , Html.button [ Attribute.class "btn-ask", Event.onClick Ask ] [ Html.text "ask" ]
             ]
         ]
 
@@ -238,8 +238,8 @@ viewAsk question =
             , Html.div [ Attribute.class "txt-question" ] <| literalHtml question.question
             ]
         , Html.div [ Attribute.class "controls" ]
-            [ Html.button [ Event.onClick Skip ] [ Html.text "skip" ]
-            , Html.button [ Event.onClick Answer ] [ Html.text "answer" ]
+            [ Html.button [ Attribute.class "btn-skip", Event.onClick Skip ] [ Html.text "skip" ]
+            , Html.button [ Attribute.class "btn-answer", Event.onClick Answer ] [ Html.text "answer" ]
             ]
         ]
 
@@ -253,7 +253,7 @@ viewAnswer question =
             , Html.div [ Attribute.class "txt-answer" ] <| literalHtml question.answer
             ]
         , Html.div [ Attribute.class "controls" ]
-            [ Html.button [ Event.onClick Next ] [ Html.text "next" ]
+            [ Html.button [ Attribute.class "btn-next", Event.onClick Next ] [ Html.text "next" ]
             ]
         ]
 
