@@ -201,8 +201,27 @@ viewModel model =
             viewQuestion game.currentQuestion
 
         Nothing ->
-            Html.text "Loading..."
+            viewStatus model.status
 
+viewStatus : Status -> Html msg
+viewStatus status =
+    let
+        text =
+            case status of
+                Idle -> 
+                    "Idling..."
+
+                Loading ->
+                    "Loading..."
+
+                FetchError ->
+                    "Something went wrong. Try reloading the app."
+
+                Nominal ->
+                    "All is well"
+
+    in
+        Html.text text
 
 viewQuestion : Question -> Html Message
 viewQuestion question =
