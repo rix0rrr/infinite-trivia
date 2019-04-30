@@ -1,6 +1,6 @@
 # infinite-trivia
 
-A simple mobile client for infinitely many OpenTDB.com trivia questions.
+A simple mobile client for infinitely many [OpenTDB.com][openTDB] trivia questions.
 
 [Play the game](https://rix0rrr.github.io/infinite-trivia/)
 
@@ -27,3 +27,4 @@ Creates all the artifacts for the published app. Don't forget to commit any chan
 Runs a local development server.
 
 [node-install]: https://nodejs.org/en/download/
+[openTDB]: https://opentdb.com/
