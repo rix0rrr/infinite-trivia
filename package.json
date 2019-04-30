@@ -4,7 +4,8 @@
   "description": "A simple mobile client for infinitely many OpenTDB.com trivia questions. Play your own game!",
   "main": "index.js",
   "scripts": {
-    "make": "elm make src/Main.elm --output docs/js/trivia.js && cp -R static docs"
+    "make": "elm make src/Main.elm --output docs/js/trivia.js && cp cp -R index.html static docs",
+    "live": "elm-live -e node_modules/.bin/elm src/Main.elm -- --debug --output=js/trivia.js"
   },
   "repository": {
     "type": "git",
@@ -19,6 +20,7 @@
   "homepage": "https://github.com/rix0rrr/infinite-trivia#readme",
   "devDependencies": {
     "elm": "^0.19.0-bugfix6",
-    "elm-format": "^0.8.1"
-   }
+    "elm-format": "^0.8.1",
+    "elm-live": "^3.4.0"
+  }
 }
