@@ -3,6 +3,7 @@ module OpenTDB exposing (Question, decode, Response, responseDecoder, getFreshQu
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (..)
 import Http
+import Url.Builder exposing (crossOrigin, int)
 
 
 type alias Question =
@@ -35,8 +36,13 @@ type Difficulty
 
 getFreshQuestions : (Result Http.Error Response -> a) -> Cmd a
 getFreshQuestions m =
+    let
+        url =
+            crossOrigin "https://opentdb.com" ["api.php"] [ int "amount" 10]
+    in
+
     Http.get
-        { url = "https://opentdb.com/api.php?amount=10"
+        { url = url 
         , expect = Http.expectJson m responseDecoder
         }
 
