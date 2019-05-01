@@ -118,7 +118,12 @@ body {
   width: 100%;
   height: 100%;
   backface-visibility: hidden;
+
+  /* This is necessary to make backface-visibility work on iOS */
   -webkit-backface-visibility: hidden;
+
+  /* Fix a bug around backface-visibility in Firefox */
+  transform: rotateX(0deg);
 }
 
 .flippable-card .card-front {
