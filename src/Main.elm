@@ -36,8 +36,7 @@ type Model
 
 
 type alias Game =
-    { seenQuestions : List Question
-    , currentQuestion : Question
+    { currentQuestion : Question
     , futureQuestions : List Question
     }
 
@@ -72,14 +71,13 @@ gameFromList questions =
 
 createGame : List Question -> Question -> Game
 createGame futureQuestions firstQuestion =
-    { seenQuestions = []
-    , currentQuestion = firstQuestion
+    { currentQuestion = firstQuestion
     , futureQuestions = futureQuestions
     }
 
 
 skip : Game -> Maybe Game
-skip { seenQuestions, currentQuestion, futureQuestions } =
+skip { currentQuestion, futureQuestions } =
     case List.head futureQuestions of
         Just nextQuestion ->
             let
@@ -89,8 +87,7 @@ skip { seenQuestions, currentQuestion, futureQuestions } =
                         |> Maybe.withDefault []
             in
             Just
-                { seenQuestions = currentQuestion :: seenQuestions
-                , currentQuestion = nextQuestion
+                { currentQuestion = nextQuestion
                 , futureQuestions = nextFutureQuestions
                 }
 
