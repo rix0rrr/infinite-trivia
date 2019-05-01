@@ -26,13 +26,17 @@ init _ =
     ( Loading, OpenTDB.getFreshQuestions GotQuestionBatch )
 
 
+type Failure
+    = FetchError Http.Error
+    | ExhaustedBatch
+    | NoQuestionsInCategory
+
+
 type Model
     = Loading
     | Nominal Game
-    | InsufficientQuestions
-    | InitialFetchError Http.Error
-    | StarvedForQuestions Game
-    | ProgressiveFetchError Http.Error Game
+    | FailureImminent Game Failure
+    | OutOfCards Failure
 
 
 type alias Game =
@@ -151,17 +155,10 @@ viewModel model =
         Nominal game ->
             viewQuestion game.currentQuestion
 
-        InitialFetchError _ ->
-            Html.text "Could not load questions. Reload the app."
+        OutOfCards e ->
+            Html.div [] (viewProblem e)
 
-        ProgressiveFetchError _ game ->
-            -- TODO: show problem with loading more questions
-            viewQuestion game.currentQuestion
-
-        InsufficientQuestions ->
-            Html.text "Could not load enough questions. Reload the app."
-
-        StarvedForQuestions game ->
+        FailureImminent game _ ->
             -- TODO: show problem with loading more questions
             viewQuestion game.currentQuestion
 
@@ -181,6 +178,19 @@ viewQuestion question =
                     viewAnswer question
     in
     Html.div [] content
+
+
+viewProblem : Failure -> List (Html Message)
+viewProblem error =
+    [ Html.div [] [ Html.text "Problem loading questions:", Html.text (errorText error) ]
+    , Html.div [ Attribute.class "controls" ]
+        [ Html.button [ Attribute.class "btn-reload", Event.onClick Reload ] [ Html.text "Try again" ] ]
+    ]
+
+
+errorText : Failure -> String
+errorText e =
+    "OEPS"
 
 
 viewCategory : Question -> List (Html Message)
@@ -286,28 +296,168 @@ type Message
     | Answer
     | Next
     | GotQuestionBatch (Result Http.Error OpenTDB.Response)
+    | Reload
 
 
 update : Message -> Model -> ( Model, Cmd Message )
 update message model =
-    case model of
-        Loading ->
-            updateWithoutAGame message model
+    case ( model, message ) of
+        ( _, Reload ) ->
+            ( model, OpenTDB.getFreshQuestions GotQuestionBatch )
 
-        Nominal game ->
-            updateWithAGame game message model
+        ( Loading, _ ) ->
+            updateFromLoading message
 
-        InsufficientQuestions ->
-            updateWithoutAGame message model
+        ( Nominal game, _ ) ->
+            updateFromNominal game message
 
-        InitialFetchError _ ->
-            updateWithoutAGame message model
+        ( FailureImminent game failure, _ ) ->
+            updateFromFailureImminent game failure message
 
-        ProgressiveFetchError _ game ->
-            updateWithAGame game message model
+        ( OutOfCards failure, _ ) ->
+           updateFromOutOfCards failure message
 
-        StarvedForQuestions game ->
-            updateWithAGame game message model
+
+updateFromLoading : Message -> ( Model, Cmd Message )
+updateFromLoading message =
+    case message of
+        GotQuestionBatch (Ok response) ->
+            let
+                questions =
+                    questionsFromResponse response
+
+                game =
+                    gameFromList questions
+
+                model =
+                    game
+                        |> Maybe.map Nominal
+                        |> Maybe.withDefault (OutOfCards NoQuestionsInCategory)
+            in
+            ( model, Cmd.none )
+
+        GotQuestionBatch (Err error) ->
+            ( OutOfCards <| FetchError error, Cmd.none )
+
+        _ ->
+            ( Loading, Cmd.none )
+
+updateFromOutOfCards : Failure ->  Message -> ( Model, Cmd Message )
+updateFromOutOfCards failure message =
+    case message of
+        GotQuestionBatch (Ok response) ->
+            let
+                questions =
+                    questionsFromResponse response
+
+                game =
+                    gameFromList questions
+
+                model =
+                    game
+                        |> Maybe.map Nominal
+                        |> Maybe.withDefault (OutOfCards NoQuestionsInCategory)
+            in
+            ( model, Cmd.none )
+
+        GotQuestionBatch (Err error) ->
+            ( OutOfCards <| FetchError error, Cmd.none )
+
+        _ ->
+            ( OutOfCards failure, Cmd.none )
+
+
+updateFromNominal : Game -> Message -> ( Model, Cmd Message )
+updateFromNominal game message =
+    let
+        nextModel =
+            case message of
+                Skip ->
+                    skip game
+                        |> Maybe.map Nominal
+                        |> Maybe.withDefault (OutOfCards ExhaustedBatch)
+
+                Ask ->
+                    Nominal <| ask game
+
+                Answer ->
+                    Nominal <| answer game
+
+                Next ->
+                    next game
+                        |> Maybe.map Nominal
+                        |> Maybe.withDefault (OutOfCards ExhaustedBatch)
+
+                GotQuestionBatch result ->
+                    case result of
+                        Ok response ->
+                            Nominal <| appendFutureQuestions response game
+
+                        Err error ->
+                            FailureImminent game <| FetchError error
+
+                Reload ->
+                    Nominal game
+
+        nextCommand =
+            gameFromModel nextModel
+                |> Maybe.map
+                    (\ng ->
+                        if List.length ng.futureQuestions <= 2 then
+                            OpenTDB.getFreshQuestions GotQuestionBatch
+
+                        else
+                            Cmd.none
+                    )
+                |> Maybe.withDefault Cmd.none
+    in
+    ( nextModel, nextCommand )
+
+updateFromFailureImminent : Game -> Failure -> Message -> ( Model, Cmd Message )
+updateFromFailureImminent game failure message =
+    let
+        nextModel =
+            case message of
+                Skip ->
+                    skip game
+                        |> Maybe.map Nominal
+                        |> Maybe.withDefault (OutOfCards failure)
+
+                Ask ->
+                    Nominal <| ask game
+
+                Answer ->
+                    Nominal <| answer game
+
+                Next ->
+                    next game
+                        |> Maybe.map Nominal
+                        |> Maybe.withDefault (OutOfCards failure)
+
+                GotQuestionBatch result ->
+                    case result of
+                        Ok response ->
+                            Nominal <| appendFutureQuestions response game
+
+                        Err error ->
+                            FailureImminent game <| FetchError error
+
+                Reload ->
+                    FailureImminent game failure
+
+        nextCommand =
+            gameFromModel nextModel
+                |> Maybe.map
+                    (\ng ->
+                        if List.length ng.futureQuestions <= 2 then
+                            OpenTDB.getFreshQuestions GotQuestionBatch
+
+                        else
+                            Cmd.none
+                    )
+                |> Maybe.withDefault Cmd.none
+    in
+    ( nextModel, nextCommand )
 
 
 updateWithoutAGame : Message -> Model -> ( Model, Cmd Message )
@@ -327,10 +477,10 @@ updateWithoutAGame message model =
                             in
                             game
                                 |> Maybe.map Nominal
-                                |> Maybe.withDefault InsufficientQuestions
+                                |> Maybe.withDefault (OutOfCards NoQuestionsInCategory)
 
                         Err error ->
-                            InitialFetchError error
+                            OutOfCards <| FetchError error
 
                 _ ->
                     model
@@ -346,7 +496,7 @@ updateWithAGame game message model =
                 Skip ->
                     skip game
                         |> Maybe.map Nominal
-                        |> Maybe.withDefault (StarvedForQuestions game)
+                        |> Maybe.withDefault (OutOfCards ExhaustedBatch)
 
                 Ask ->
                     Nominal <| ask game
@@ -357,7 +507,7 @@ updateWithAGame game message model =
                 Next ->
                     next game
                         |> Maybe.map Nominal
-                        |> Maybe.withDefault (StarvedForQuestions game)
+                        |> Maybe.withDefault (OutOfCards ExhaustedBatch)
 
                 GotQuestionBatch result ->
                     case result of
@@ -365,25 +515,42 @@ updateWithAGame game message model =
                             Nominal <| appendFutureQuestions response game
 
                         Err error ->
-                            ProgressiveFetchError error game
+                            FailureImminent game <| FetchError error
+
+                Reload ->
+                    model
 
         nextCommand =
-            case nextModel of
-                -- TODO: are these all when we need to fetch next questions
-                StarvedForQuestions _ ->
+            case message of
+                Reload ->
                     OpenTDB.getFreshQuestions GotQuestionBatch
 
-                Nominal ng ->
-                    if List.length ng.futureQuestions <= 2 then
-                        OpenTDB.getFreshQuestions GotQuestionBatch
-
-                    else
-                        Cmd.none
-
                 _ ->
-                    Cmd.none
+                    gameFromModel nextModel
+                        |> Maybe.map
+                            (\ng ->
+                                if List.length ng.futureQuestions <= 2 then
+                                    OpenTDB.getFreshQuestions GotQuestionBatch
+
+                                else
+                                    Cmd.none
+                            )
+                        |> Maybe.withDefault Cmd.none
     in
     ( nextModel, nextCommand )
+
+
+gameFromModel : Model -> Maybe Game
+gameFromModel model =
+    case model of
+        FailureImminent g _ ->
+            Just g
+
+        Nominal g ->
+            Just g
+
+        _ ->
+            Nothing
 
 
 questionsFromResponse : OpenTDB.Response -> List Question

@@ -102,6 +102,11 @@ body {
   color: white;
 }
 
+.btn-reload {
+  background: maroon;
+  color: white;
+}
+
 .flippable-card {
   position: relative;
   transition: transform 0.6s;
