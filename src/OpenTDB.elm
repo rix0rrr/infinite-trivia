@@ -30,7 +30,7 @@ type Difficulty
     = Easy
     | Medium
     | Hard
-    | UnknownDifficulty
+    | UnknownDifficulty String
 
 
 getFreshQuestions : (Result Http.Error Response -> a) -> Cmd a
@@ -99,6 +99,6 @@ difficultyDecoder =
                     Hard
 
                 _ ->
-                    UnknownDifficulty
+                    UnknownDifficulty input
     in
     Decode.map toDifficulty Decode.string
