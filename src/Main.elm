@@ -220,7 +220,8 @@ viewCardFront question stage =
           else
             []
         , if stage == Answering then
-            [Html.div [ Attribute.class "txt-answer" ] <| literalHtml question.answer]
+            [ Html.div [ Attribute.class "txt-answer" ] <| literalHtml question.answer ]
+
           else
             []
         ]
