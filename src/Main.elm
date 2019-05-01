@@ -301,70 +301,70 @@ type Message
 
 update : Message -> Model -> ( Model, Cmd Message )
 update message model =
-    case ( model, message ) of
-        ( _, Reload ) ->
+    case ( message, model ) of
+        ( Reload, _ ) ->
             ( model, OpenTDB.getFreshQuestions GotQuestionBatch )
 
-        (Nominal game, Skip) ->
+        ( Skip, Nominal game ) ->
             skip game
                 |> Maybe.map Nominal
                 |> Maybe.withDefault (OutOfCards ExhaustedBatch)
                 |> addLoadingCommand
 
-        (Nominal game, Ask) ->
-            (Nominal <| ask game, Cmd.none)
+        ( Skip, FailureImminent failure game ) ->
+            skip game
+                |> Maybe.map Nominal
+                |> Maybe.withDefault (OutOfCards failure)
+                |> addLoadingCommand
 
-        (Nominal game, Answer) ->
-            (Nominal <| answer game, Cmd.none)
+        ( Ask, Nominal game ) ->
+            ( Nominal <| ask game, Cmd.none )
 
-        (Nominal game, Next) ->
+        ( Ask, FailureImminent failure game ) ->
+            ( FailureImminent failure <| ask game, Cmd.none )
+
+        ( Answer, Nominal game ) ->
+            ( Nominal <| answer game, Cmd.none )
+
+        ( Answer, FailureImminent failure game ) ->
+            ( FailureImminent failure <| answer game, Cmd.none )
+
+        ( Next, Nominal game ) ->
             next game
                 |> Maybe.map Nominal
                 |> Maybe.withDefault (OutOfCards ExhaustedBatch)
                 |> addLoadingCommand
 
-        (Nominal game, GotQuestionBatch (Ok response)) ->
+        ( Next, FailureImminent failure game ) ->
+            next game
+                |> Maybe.map Nominal
+                |> Maybe.withDefault (OutOfCards failure)
+                |> addLoadingCommand
+
+        ( GotQuestionBatch (Ok response), Nominal game ) ->
             appendFutureQuestions response game
                 |> Nominal
                 |> addLoadingCommand
 
-        (Nominal game, GotQuestionBatch (Err error)) ->
-            game
-                |> FailureImminent (FetchError error)
-                |> addLoadingCommand
-
-        (FailureImminent failure game, Skip) ->
-            skip game
-                |> Maybe.map Nominal
-                |> Maybe.withDefault (OutOfCards failure)
-                |> addLoadingCommand
-
-        (FailureImminent failure game, Ask) ->
-            (Nominal <| ask game, Cmd.none)
-
-        (FailureImminent failure game, Answer) ->
-            (Nominal <| answer game, Cmd.none)
-
-        (FailureImminent failure game, Next) ->
-            next game
-                |> Maybe.map Nominal
-                |> Maybe.withDefault (OutOfCards failure)
-                |> addLoadingCommand
-
-        (FailureImminent failure game, GotQuestionBatch (Ok response)) ->
+        ( GotQuestionBatch (Ok response), FailureImminent failure game ) ->
             appendFutureQuestions response game
                 |> FailureImminent failure
                 |> addLoadingCommand
 
-        (FailureImminent failure game, GotQuestionBatch (Err error)) ->
+        ( GotQuestionBatch (Ok response), _ ) ->
+            ( modelFromResponse response, Cmd.none )
+
+        ( GotQuestionBatch (Err error), Nominal game ) ->
             game
                 |> FailureImminent (FetchError error)
                 |> addLoadingCommand
 
-        ( _, GotQuestionBatch (Ok response) ) ->
-            ( modelFromResponse response, Cmd.none )
+        ( GotQuestionBatch (Err error), FailureImminent failure game ) ->
+            game
+                |> FailureImminent (FetchError error)
+                |> addLoadingCommand
 
-        ( _, GotQuestionBatch (Err error) ) ->
+        ( GotQuestionBatch (Err error), _ ) ->
             ( OutOfCards <| FetchError error, Cmd.none )
 
         ( _, _ ) ->
@@ -401,20 +401,22 @@ gameFromModel model =
             Nothing
 
 
-addLoadingCommand : Model -> (Model, Cmd Message)
+addLoadingCommand : Model -> ( Model, Cmd Message )
 addLoadingCommand model =
     let
-        command = gameFromModel model
-            |> Maybe.map
-                (\ng ->
-                    if List.length ng.futureQuestions <= 2 then
-                        OpenTDB.getFreshQuestions GotQuestionBatch
+        command =
+            gameFromModel model
+                |> Maybe.map
+                    (\ng ->
+                        if List.length ng.futureQuestions <= 2 then
+                            OpenTDB.getFreshQuestions GotQuestionBatch
 
-                    else
-                        Cmd.none
-                )
-            |> Maybe.withDefault Cmd.none
-    in (model, command)
+                        else
+                            Cmd.none
+                    )
+                |> Maybe.withDefault Cmd.none
+    in
+    ( model, command )
 
 
 questionsFromResponse : OpenTDB.Response -> List Question
