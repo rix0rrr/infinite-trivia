@@ -20,11 +20,10 @@ type alias Question =
     , incorrectAnswers : List String
     }
 
-
 type Type
     = MultipleChoice
     | Boolean
-    | UnknownType
+    | UnknownType String
 
 
 type Difficulty
@@ -80,7 +79,7 @@ typeDecoder =
                     Boolean
 
                 _ ->
-                    UnknownType
+                    UnknownType input
     in
     Decode.map toType Decode.string
 
