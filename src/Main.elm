@@ -35,7 +35,7 @@ type Failure
 type Model
     = Loading
     | Nominal Game
-    | FailureImminent Game Failure
+    | FailureImminent Failure Game
     | OutOfCards Failure
 
 
@@ -158,7 +158,7 @@ viewModel model =
         OutOfCards e ->
             Html.div [] (viewProblem e)
 
-        FailureImminent game _ ->
+        FailureImminent _ game ->
             -- TODO: show problem with loading more questions
             viewQuestion game.currentQuestion
 
@@ -305,245 +305,93 @@ update message model =
         ( _, Reload ) ->
             ( model, OpenTDB.getFreshQuestions GotQuestionBatch )
 
-        ( Loading, _ ) ->
-            updateFromLoading message
+        (Nominal game, Skip) ->
+            skip game
+                |> Maybe.map Nominal
+                |> Maybe.withDefault (OutOfCards ExhaustedBatch)
+                |> addLoadingCommand
 
-        ( Nominal game, _ ) ->
-            updateFromNominal game message
+        (Nominal game, Ask) ->
+            (Nominal <| ask game, Cmd.none)
 
-        ( FailureImminent game failure, _ ) ->
-            updateFromFailureImminent game failure message
+        (Nominal game, Answer) ->
+            (Nominal <| answer game, Cmd.none)
 
-        ( OutOfCards failure, _ ) ->
-           updateFromOutOfCards failure message
+        (Nominal game, Next) ->
+            next game
+                |> Maybe.map Nominal
+                |> Maybe.withDefault (OutOfCards ExhaustedBatch)
+                |> addLoadingCommand
 
+        (Nominal game, GotQuestionBatch (Ok response)) ->
+            appendFutureQuestions response game
+                |> Nominal
+                |> addLoadingCommand
 
-updateFromLoading : Message -> ( Model, Cmd Message )
-updateFromLoading message =
-    case message of
-        GotQuestionBatch (Ok response) ->
-            let
-                questions =
-                    questionsFromResponse response
+        (Nominal game, GotQuestionBatch (Err error)) ->
+            game
+                |> FailureImminent (FetchError error)
+                |> addLoadingCommand
 
-                game =
-                    gameFromList questions
+        (FailureImminent failure game, Skip) ->
+            skip game
+                |> Maybe.map Nominal
+                |> Maybe.withDefault (OutOfCards failure)
+                |> addLoadingCommand
 
-                model =
-                    game
-                        |> Maybe.map Nominal
-                        |> Maybe.withDefault (OutOfCards NoQuestionsInCategory)
-            in
-            ( model, Cmd.none )
+        (FailureImminent failure game, Ask) ->
+            (Nominal <| ask game, Cmd.none)
 
-        GotQuestionBatch (Err error) ->
+        (FailureImminent failure game, Answer) ->
+            (Nominal <| answer game, Cmd.none)
+
+        (FailureImminent failure game, Next) ->
+            next game
+                |> Maybe.map Nominal
+                |> Maybe.withDefault (OutOfCards failure)
+                |> addLoadingCommand
+
+        (FailureImminent failure game, GotQuestionBatch (Ok response)) ->
+            appendFutureQuestions response game
+                |> FailureImminent failure
+                |> addLoadingCommand
+
+        (FailureImminent failure game, GotQuestionBatch (Err error)) ->
+            game
+                |> FailureImminent (FetchError error)
+                |> addLoadingCommand
+
+        ( _, GotQuestionBatch (Ok response) ) ->
+            ( modelFromResponse response, Cmd.none )
+
+        ( _, GotQuestionBatch (Err error) ) ->
             ( OutOfCards <| FetchError error, Cmd.none )
 
-        _ ->
-            ( Loading, Cmd.none )
-
-updateFromOutOfCards : Failure ->  Message -> ( Model, Cmd Message )
-updateFromOutOfCards failure message =
-    case message of
-        GotQuestionBatch (Ok response) ->
-            let
-                questions =
-                    questionsFromResponse response
-
-                game =
-                    gameFromList questions
-
-                model =
-                    game
-                        |> Maybe.map Nominal
-                        |> Maybe.withDefault (OutOfCards NoQuestionsInCategory)
-            in
+        ( _, _ ) ->
             ( model, Cmd.none )
 
-        GotQuestionBatch (Err error) ->
-            ( OutOfCards <| FetchError error, Cmd.none )
 
-        _ ->
-            ( OutOfCards failure, Cmd.none )
-
-
-updateFromNominal : Game -> Message -> ( Model, Cmd Message )
-updateFromNominal game message =
+modelFromResponse : OpenTDB.Response -> Model
+modelFromResponse response =
     let
-        nextModel =
-            case message of
-                Skip ->
-                    skip game
-                        |> Maybe.map Nominal
-                        |> Maybe.withDefault (OutOfCards ExhaustedBatch)
+        questions =
+            questionsFromResponse response
 
-                Ask ->
-                    Nominal <| ask game
+        game =
+            gameFromList questions
 
-                Answer ->
-                    Nominal <| answer game
-
-                Next ->
-                    next game
-                        |> Maybe.map Nominal
-                        |> Maybe.withDefault (OutOfCards ExhaustedBatch)
-
-                GotQuestionBatch result ->
-                    case result of
-                        Ok response ->
-                            Nominal <| appendFutureQuestions response game
-
-                        Err error ->
-                            FailureImminent game <| FetchError error
-
-                Reload ->
-                    Nominal game
-
-        nextCommand =
-            gameFromModel nextModel
-                |> Maybe.map
-                    (\ng ->
-                        if List.length ng.futureQuestions <= 2 then
-                            OpenTDB.getFreshQuestions GotQuestionBatch
-
-                        else
-                            Cmd.none
-                    )
-                |> Maybe.withDefault Cmd.none
+        model =
+            game
+                |> Maybe.map Nominal
+                |> Maybe.withDefault (OutOfCards NoQuestionsInCategory)
     in
-    ( nextModel, nextCommand )
-
-updateFromFailureImminent : Game -> Failure -> Message -> ( Model, Cmd Message )
-updateFromFailureImminent game failure message =
-    let
-        nextModel =
-            case message of
-                Skip ->
-                    skip game
-                        |> Maybe.map Nominal
-                        |> Maybe.withDefault (OutOfCards failure)
-
-                Ask ->
-                    Nominal <| ask game
-
-                Answer ->
-                    Nominal <| answer game
-
-                Next ->
-                    next game
-                        |> Maybe.map Nominal
-                        |> Maybe.withDefault (OutOfCards failure)
-
-                GotQuestionBatch result ->
-                    case result of
-                        Ok response ->
-                            Nominal <| appendFutureQuestions response game
-
-                        Err error ->
-                            FailureImminent game <| FetchError error
-
-                Reload ->
-                    FailureImminent game failure
-
-        nextCommand =
-            gameFromModel nextModel
-                |> Maybe.map
-                    (\ng ->
-                        if List.length ng.futureQuestions <= 2 then
-                            OpenTDB.getFreshQuestions GotQuestionBatch
-
-                        else
-                            Cmd.none
-                    )
-                |> Maybe.withDefault Cmd.none
-    in
-    ( nextModel, nextCommand )
-
-
-updateWithoutAGame : Message -> Model -> ( Model, Cmd Message )
-updateWithoutAGame message model =
-    let
-        nextModel =
-            case message of
-                GotQuestionBatch result ->
-                    case result of
-                        Ok response ->
-                            let
-                                questions =
-                                    questionsFromResponse response
-
-                                game =
-                                    gameFromList questions
-                            in
-                            game
-                                |> Maybe.map Nominal
-                                |> Maybe.withDefault (OutOfCards NoQuestionsInCategory)
-
-                        Err error ->
-                            OutOfCards <| FetchError error
-
-                _ ->
-                    model
-    in
-    ( nextModel, Cmd.none )
-
-
-updateWithAGame : Game -> Message -> Model -> ( Model, Cmd Message )
-updateWithAGame game message model =
-    let
-        nextModel =
-            case message of
-                Skip ->
-                    skip game
-                        |> Maybe.map Nominal
-                        |> Maybe.withDefault (OutOfCards ExhaustedBatch)
-
-                Ask ->
-                    Nominal <| ask game
-
-                Answer ->
-                    Nominal <| answer game
-
-                Next ->
-                    next game
-                        |> Maybe.map Nominal
-                        |> Maybe.withDefault (OutOfCards ExhaustedBatch)
-
-                GotQuestionBatch result ->
-                    case result of
-                        Ok response ->
-                            Nominal <| appendFutureQuestions response game
-
-                        Err error ->
-                            FailureImminent game <| FetchError error
-
-                Reload ->
-                    model
-
-        nextCommand =
-            case message of
-                Reload ->
-                    OpenTDB.getFreshQuestions GotQuestionBatch
-
-                _ ->
-                    gameFromModel nextModel
-                        |> Maybe.map
-                            (\ng ->
-                                if List.length ng.futureQuestions <= 2 then
-                                    OpenTDB.getFreshQuestions GotQuestionBatch
-
-                                else
-                                    Cmd.none
-                            )
-                        |> Maybe.withDefault Cmd.none
-    in
-    ( nextModel, nextCommand )
+    model
 
 
 gameFromModel : Model -> Maybe Game
 gameFromModel model =
     case model of
-        FailureImminent g _ ->
+        FailureImminent _ g ->
             Just g
 
         Nominal g ->
@@ -551,6 +399,22 @@ gameFromModel model =
 
         _ ->
             Nothing
+
+
+addLoadingCommand : Model -> (Model, Cmd Message)
+addLoadingCommand model =
+    let
+        command = gameFromModel model
+            |> Maybe.map
+                (\ng ->
+                    if List.length ng.futureQuestions <= 2 then
+                        OpenTDB.getFreshQuestions GotQuestionBatch
+
+                    else
+                        Cmd.none
+                )
+            |> Maybe.withDefault Cmd.none
+    in (model, command)
 
 
 questionsFromResponse : OpenTDB.Response -> List Question
